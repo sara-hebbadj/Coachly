@@ -1,0 +1,17 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Coachly.Shared.DTOs;
+
+public class ClassDto
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public DateTime StartTime { get; set; }
+    public int DurationMinutes { get; set; }
+    public decimal Price { get; set; }
+    public int CoachId { get; set; }
+}

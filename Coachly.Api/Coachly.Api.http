@@ -1,0 +1,6 @@
+@Coachly.Api_HostAddress = http://localhost:5114
+
+GET {{Coachly.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
