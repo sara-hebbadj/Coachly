@@ -1,17 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<TargetFrameworks>net9.0-android;net9.0-ios;net9.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net9.0-windows10.0.19041.0</TargetFrameworks>
-		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
-		<!-- <TargetFrameworks>$(TargetFrameworks);net9.0-tizen</TargetFrameworks> -->
+	<!-- ===================================================== -->
+	<!-- TARGET FRAMEWORKS (CONDITIONAL, PROFESSIONAL SETUP) -->
+	<!-- ===================================================== -->
 
-		<!-- Note for MacCatalyst:
-		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
-		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
-		The Mac App Store will NOT accept apps with ONLY maccatalyst-arm64 indicated;
-		either BOTH runtimes must be indicated or ONLY macatalyst-x64. -->
-		<!-- For example: <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers> -->
+	<PropertyGroup>
+		<EnableTizen>false</EnableTizen>
+		<!-- Base platform (always available) -->
+		<TargetFrameworks>net9.0-android</TargetFrameworks>
+
+		<!-- Windows support (only when on Windows) -->
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">
+			$(TargetFrameworks);net9.0-windows10.0.19041.0
+		</TargetFrameworks>
+
+		<!-- iOS & MacCatalyst (only when on macOS) -->
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">
+			$(TargetFrameworks);net9.0-ios;net9.0-maccatalyst
+		</TargetFrameworks>
 
 		<OutputType>Exe</OutputType>
 		<RootNamespace>Coachly</RootNamespace>
@@ -20,93 +26,98 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 
-		<!-- Display name -->
+		<!-- App Identity -->
 		<ApplicationTitle>Coachly</ApplicationTitle>
-
-		<!-- App Identifier -->
 		<ApplicationId>com.companyname.coachly</ApplicationId>
 
-		<!-- Versions -->
+		<!-- Versioning -->
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
-		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
+		<!-- Windows packaging -->
 		<WindowsPackageType>None</WindowsPackageType>
 
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
-		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
+		<!-- Platform minimum versions -->
+		<SupportedOSPlatformVersion
+		  Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+			21.0
+		</SupportedOSPlatformVersion>
+
+		<SupportedOSPlatformVersion
+		  Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+			10.0.17763.0
+		</SupportedOSPlatformVersion>
+
+		<SupportedOSPlatformVersion
+		  Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+			15.0
+		</SupportedOSPlatformVersion>
+
+		<SupportedOSPlatformVersion
+		  Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+			15.0
+		</SupportedOSPlatformVersion>
 	</PropertyGroup>
+
+	<!-- ===================================================== -->
+	<!-- MAUI RESOURCES -->
+	<!-- ===================================================== -->
 
 	<ItemGroup>
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+		<MauiIcon Include="Resources\AppIcon\appicon.svg"
+				  ForegroundFile="Resources\AppIcon\appiconfg.svg"
+				  Color="#512BD4" />
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg"
+						  Color="#512BD4"
+						  BaseSize="128,128" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
-		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
-		
-		<!-- Custom Fonts -->
+		<MauiImage Update="Resources\Images\dotnet_bot.png"
+				   Resize="True"
+				   BaseSize="300,185" />
+
+		<!-- Fonts -->
 		<MauiFont Include="Resources\Fonts\*" />
 
-		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
-		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<!-- Raw assets -->
+		<MauiAsset Include="Resources\Raw\**"
+				   LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
+
+	<!-- ===================================================== -->
+	<!-- PACKAGES -->
+	<!-- ===================================================== -->
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.8" />
 	</ItemGroup>
 
+	<!-- ===================================================== -->
+	<!-- XAML REGISTRATION -->
+	<!-- ===================================================== -->
+
 	<ItemGroup>
-	  <MauiXaml Update="Pages\Auth\LoginPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Auth\RegisterPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Client\CheckoutPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Client\ClassDetailsPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Client\HomePage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Client\MembershipPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Client\MyBookingsPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Client\ProfilePage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Client\SchedulePage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Coach\ClassRosterPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Coach\CoachDashboardPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Coach\EditClassPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Coach\ManageClassesPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="Pages\Coach\MembersPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
+		<MauiXaml Update="Pages\Auth\LoginPage.xaml" />
+		<MauiXaml Update="Pages\Auth\RegisterPage.xaml" />
+
+		<MauiXaml Update="Pages\Client\HomePage.xaml" />
+		<MauiXaml Update="Pages\Client\SchedulePage.xaml" />
+		<MauiXaml Update="Pages\Client\ClassDetailsPage.xaml" />
+		<MauiXaml Update="Pages\Client\CheckoutPage.xaml" />
+		<MauiXaml Update="Pages\Client\MyBookingsPage.xaml" />
+		<MauiXaml Update="Pages\Client\MembershipPage.xaml" />
+		<MauiXaml Update="Pages\Client\ProfilePage.xaml" />
+
+		<MauiXaml Update="Pages\Coach\CoachDashboardPage.xaml" />
+		<MauiXaml Update="Pages\Coach\ManageClassesPage.xaml" />
+		<MauiXaml Update="Pages\Coach\EditClassPage.xaml" />
+		<MauiXaml Update="Pages\Coach\ClassRosterPage.xaml" />
+		<MauiXaml Update="Pages\Coach\MembersPage.xaml" />
 	</ItemGroup>
 
 </Project>
