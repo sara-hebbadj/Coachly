@@ -1,15 +1,19 @@
-﻿namespace Coachly
-{
-    public partial class App : Application
-    {
-        public App()
-        {
-            InitializeComponent();
-        }
+﻿using Coachly.Services;
 
-        protected override Window CreateWindow(IActivationState? activationState)
-        {
-            return new Window(new AppShell());
-        }
+namespace Coachly;
+
+public partial class App : Application
+{
+    private readonly AuthService _authService;
+
+    public App(AuthService authService)
+    {
+        InitializeComponent();
+        _authService = authService;
+    }
+
+    protected override Window CreateWindow(IActivationState? activationState)
+    {
+        return new Window(new AppShell(_authService));
     }
 }

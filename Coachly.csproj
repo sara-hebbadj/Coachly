@@ -97,6 +97,17 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.8" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<ProjectReference Include="Coachly.Shared\Coachly.Shared.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Remove="Coachly.Api\**\*.cs" />
+		<Compile Remove="Coachly.Shared\**\*.cs" />
+		<None Remove="Coachly.Api\**\*" />
+		<None Remove="Coachly.Shared\**\*" />
+	</ItemGroup>
+
 	<!-- ===================================================== -->
 	<!-- XAML REGISTRATION -->
 	<!-- ===================================================== -->
