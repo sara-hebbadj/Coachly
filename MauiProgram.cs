@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Coachly.Services;
+using Coachly.ViewModels.Auth;
+using Microsoft.Extensions.Logging;
 
 namespace Coachly
 {
@@ -18,6 +20,10 @@ namespace Coachly
 #if DEBUG
     		builder.Logging.AddDebug();
 #endif
+
+            builder.Services.AddSingleton<AuthService>();
+            builder.Services.AddTransient<LoginViewModel>();
+            builder.Services.AddTransient<RegisterViewModel>();
 
             return builder.Build();
         }

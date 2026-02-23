@@ -3,12 +3,37 @@
     x:Class="Coachly.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:local="clr-namespace:Coachly"
+    xmlns:auth="clr-namespace:Coachly.Pages.Auth"
+    xmlns:client="clr-namespace:Coachly.Pages.Client"
+    xmlns:coach="clr-namespace:Coachly.Pages.Coach"
     Title="Coachly">
 
-    <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+    <FlyoutItem x:Name="AuthGroup" Title="Account" Route="AuthRoot">
+        <ShellContent Title="Login" ContentTemplate="{DataTemplate auth:LoginPage}" Route="Login" />
+        <ShellContent Title="Register" ContentTemplate="{DataTemplate auth:RegisterPage}" Route="Register" />
+    </FlyoutItem>
 
+    <FlyoutItem x:Name="ClientGroup" Title="Client" Route="ClientRoot">
+        <Tab Title="Home">
+            <ShellContent Title="Home" ContentTemplate="{DataTemplate client:HomePage}" Route="ClientHome" />
+        </Tab>
+        <Tab Title="Schedule">
+            <ShellContent Title="Schedule" ContentTemplate="{DataTemplate client:SchedulePage}" Route="ClientSchedule" />
+        </Tab>
+        <Tab Title="Profile">
+            <ShellContent Title="Profile" ContentTemplate="{DataTemplate client:ProfilePage}" Route="ClientProfile" />
+        </Tab>
+    </FlyoutItem>
+
+    <FlyoutItem x:Name="CoachGroup" Title="Coach" Route="CoachRoot">
+        <Tab Title="Dashboard">
+            <ShellContent Title="Dashboard" ContentTemplate="{DataTemplate coach:CoachDashboardPage}" Route="CoachDashboard" />
+        </Tab>
+        <Tab Title="Classes">
+            <ShellContent Title="Classes" ContentTemplate="{DataTemplate coach:ManageClassesPage}" Route="CoachClasses" />
+        </Tab>
+        <Tab Title="Members">
+            <ShellContent Title="Members" ContentTemplate="{DataTemplate coach:MembersPage}" Route="CoachMembers" />
+        </Tab>
+    </FlyoutItem>
 </Shell>
