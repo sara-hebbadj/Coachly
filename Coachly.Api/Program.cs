@@ -2,7 +2,9 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 
-var builder = WebApplication.CreateBuilder(args);
+Microsoft.AspNetCore.Builder.WebApplicationBuilder builder =
+    Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
+
 
 // =======================
 // SERVICES

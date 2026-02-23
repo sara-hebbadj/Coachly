@@ -68,6 +68,11 @@ public class AuthController : ControllerBase
         });
     }
 
+    private ActionResult<LoginResponseDto> Unauthorized(string result)
+    {
+        throw new NotImplementedException();
+    }
+
     private static string Hash(string value)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
