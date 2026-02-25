@@ -1,6 +1,7 @@
 ﻿using System.Net.Http.Json;
 using Coachly.Shared.DTOs;
 using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.Authentication;
 using Microsoft.Maui.Storage;
 
 namespace Coachly.Services;
@@ -73,7 +74,7 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
 
         if (!providerOptions.IsGoogleConfigured)
         {
-            return (false, "Configure GoogleClientId and BackendOAuthStartUrl in MauiProgram.");
+            return (false, "Configure BackendOAuthStartUrl and MobileAuthCallbackUri in MauiProgram.");
         }
 
         return await StartExternalSignInAsync("google");
@@ -88,7 +89,7 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
 
         if (!providerOptions.IsAppleConfigured)
         {
-            return (false, "Configure AppleClientId and BackendOAuthStartUrl in MauiProgram.");
+            return (false, "Configure BackendOAuthStartUrl and MobileAuthCallbackUri in MauiProgram.");
         }
 
         return await StartExternalSignInAsync("apple");
@@ -97,11 +98,41 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
     private async Task<(bool IsSuccess, string Error)> StartExternalSignInAsync(string provider)
     {
         var startUrl = BuildExternalStartUrl(provider);
+        var callbackUrl = providerOptions.MobileAuthCallbackUri;
 
         try
         {
-            await Browser.Default.OpenAsync(startUrl, BrowserLaunchMode.SystemPreferred);
+            var result = await WebAuthenticator.Default.AuthenticateAsync(new Uri(startUrl), new Uri(callbackUrl));
+
+            if (result.Properties.TryGetValue("error", out var authError) && !string.IsNullOrWhiteSpace(authError))
+            {
+                return (false, authError);
+            }
+
+            if (!result.Properties.TryGetValue("token", out var token) || string.IsNullOrWhiteSpace(token))
+            {
+                return (false, $"{provider} sign-in did not return an auth token.");
+            }
+
+            var role = result.Properties.TryGetValue("role", out var roleValue)
+                ? roleValue
+                : "Client";
+
+            await SecureStorage.Default.SetAsync(AuthTokenKey, token);
+            IsAuthenticated = true;
+            CurrentRole = role;
+            AuthStateChanged?.Invoke();
+
             return (true, string.Empty);
+        }
+        catch (TaskCanceledException)
+        {
+            return (false, $"{provider} sign-in was cancelled.");
+        }
+        catch (FeatureNotSupportedException)
+        {
+            await Browser.Default.OpenAsync(startUrl, BrowserLaunchMode.SystemPreferred);
+            return (false, "Interactive callback capture is not supported on this platform. Browser opened for manual completion.");
         }
         catch (Exception ex)
         {
@@ -120,7 +151,8 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
     private string BuildExternalStartUrl(string provider)
     {
         var baseUrl = providerOptions.BackendOAuthStartUrl.TrimEnd('/');
-        return $"{baseUrl}/api/auth/external/{provider}/start";
+        var callbackUrl = Uri.EscapeDataString(providerOptions.MobileAuthCallbackUri);
+        return $"{baseUrl}/api/auth/external/{provider}/start?mobileCallback={callbackUrl}";
     }
 #pragma warning restore CA1416
 }

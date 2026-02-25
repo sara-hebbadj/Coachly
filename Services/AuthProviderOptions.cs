@@ -3,15 +3,14 @@
 public class AuthProviderOptions
 {
     public bool EnableExternalProviderSignIn { get; init; } = false;
-    public string GoogleClientId { get; init; } = string.Empty;
-    public string AppleClientId { get; init; } = string.Empty;
     public string BackendOAuthStartUrl { get; init; } = string.Empty;
+    public string MobileAuthCallbackUri { get; init; } = "coachly://auth-callback";
 
     public bool IsGoogleConfigured =>
-        !string.IsNullOrWhiteSpace(GoogleClientId)
-        && !string.IsNullOrWhiteSpace(BackendOAuthStartUrl);
+        !string.IsNullOrWhiteSpace(BackendOAuthStartUrl)
+        && !string.IsNullOrWhiteSpace(MobileAuthCallbackUri);
 
     public bool IsAppleConfigured =>
-        !string.IsNullOrWhiteSpace(AppleClientId)
-        && !string.IsNullOrWhiteSpace(BackendOAuthStartUrl);
+        !string.IsNullOrWhiteSpace(BackendOAuthStartUrl)
+        && !string.IsNullOrWhiteSpace(MobileAuthCallbackUri);
 }
