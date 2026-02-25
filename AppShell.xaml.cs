@@ -4,6 +4,8 @@ namespace Coachly;
 
 public partial class AppShell : Shell
 {
+#pragma warning disable CA1416
+
     private readonly AuthService _authService;
 
     public AppShell(AuthService authService)
@@ -20,7 +22,14 @@ public partial class AppShell : Shell
         var isAuthenticated = _authService.IsAuthenticated;
 
         AuthGroup.IsVisible = !isAuthenticated;
-        ClientGroup.IsVisible = isAuthenticated && _authService.CurrentRole == "Client";
-        CoachGroup.IsVisible = isAuthenticated && _authService.CurrentRole == "Coach";
+        ClientGroup.IsVisible = isAuthenticated && string.Equals(_authService.CurrentRole, "Client", StringComparison.Ordinal);
+        CoachGroup.IsVisible = isAuthenticated && string.Equals(_authService.CurrentRole, "Coach", StringComparison.Ordinal);
     }
+
+    private async void OnLogoutClicked(object? sender, EventArgs e)
+    {
+        _authService.Logout();
+        await Shell.Current.GoToAsync("//Login");
+    }
+#pragma warning restore CA1416
 }

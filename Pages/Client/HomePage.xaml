@@ -2,11 +2,53 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="Coachly.Pages.Client.HomePage"
-             Title="HomePage">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+             Title="Home"
+             BackgroundColor="{AppThemeBinding Light=#EEF2FF, Dark=#0E0E12}">
+    <ScrollView>
+        <VerticalStackLayout Padding="18,24,18,24" Spacing="16">
+            <Border StrokeThickness="0" Padding="20" BackgroundColor="{StaticResource Primary}">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="24" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="Client Dashboard" TextColor="White" FontSize="26" FontAttributes="Bold" />
+                    <Label Text="Track your progress, memberships, and upcoming classes in one place."
+                           TextColor="#E9E3FF" FontSize="13" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Border Grid.Column="0" Padding="14" Stroke="{AppThemeBinding Light=#E1E6FB, Dark=#3B3F52}" BackgroundColor="{AppThemeBinding Light=White, Dark=#1A1A22}">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="16" />
+                    </Border.StrokeShape>
+                    <VerticalStackLayout>
+                        <Label Text="4" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource Primary}" />
+                        <Label Text="Upcoming Classes" FontSize="12" TextColor="{AppThemeBinding Light=#5E677A, Dark=#B8BDD0}" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Grid.Column="1" Padding="14" Stroke="{AppThemeBinding Light=#E1E6FB, Dark=#3B3F52}" BackgroundColor="{AppThemeBinding Light=White, Dark=#1A1A22}">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="16" />
+                    </Border.StrokeShape>
+                    <VerticalStackLayout>
+                        <Label Text="87%" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource Primary}" />
+                        <Label Text="Attendance Rate" FontSize="12" TextColor="{AppThemeBinding Light=#5E677A, Dark=#B8BDD0}" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <Border Padding="16" Stroke="{AppThemeBinding Light=#E1E6FB, Dark=#3B3F52}" BackgroundColor="{AppThemeBinding Light=White, Dark=#1A1A22}">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="18" />
+                </Border.StrokeShape>
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="Today’s Focus" FontSize="16" FontAttributes="Bold" TextColor="{AppThemeBinding Light=#111827, Dark=White}" />
+                    <Label Text="Strength Conditioning with Coach Maya at 6:00 PM"
+                           FontSize="13" TextColor="{AppThemeBinding Light=#5E677A, Dark=#B8BDD0}" />
+                    <Button Text="View Class Details" HeightRequest="46" CornerRadius="12" FontAttributes="Bold" />
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
 </ContentPage>

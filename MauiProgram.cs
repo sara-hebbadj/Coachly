@@ -18,8 +18,27 @@ namespace Coachly
                 });
 
 #if DEBUG
-    		builder.Logging.AddDebug();
+            builder.Logging.AddDebug();
 #endif
+
+            var apiBaseUrl = DeviceInfo.Platform == DevicePlatform.Android
+                ? "http://10.0.2.2:5114/"
+                : "http://localhost:5114/";
+
+            builder.Services.AddSingleton(_ => new HttpClient
+            {
+                BaseAddress = new Uri(apiBaseUrl),
+                Timeout = TimeSpan.FromSeconds(20)
+            });
+
+            builder.Services.AddSingleton(new AuthProviderOptions
+            {
+                // Copy-paste your real provider values here.
+                GoogleClientId = "79881017996-g2pi2eirmik36eu9r45m417mp6fkm77s.apps.googleusercontent.com",
+                AppleClientId = "",
+                BackendOAuthStartUrl = apiBaseUrl,
+                EnableExternalProviderSignIn = false
+            });
 
             builder.Services.AddSingleton<AuthService>();
             builder.Services.AddTransient<LoginViewModel>();
@@ -27,5 +46,8 @@ namespace Coachly
 
             return builder.Build();
         }
+
+
     }
+
 }

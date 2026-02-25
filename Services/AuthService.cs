@@ -1,14 +1,14 @@
-﻿using Coachly.Shared.DTOs;
+﻿using System.Net.Http.Json;
+using Coachly.Shared.DTOs;
+using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.Storage;
 
 namespace Coachly.Services;
 
-public class AuthService
+public class AuthService(HttpClient httpClient, AuthProviderOptions providerOptions)
 {
-    private readonly List<AppUser> _users =
-    [
-        new() { Id = 1, FullName = "Demo Client", Email = "client@coachly.app", Password = "password123", Role = "Client" },
-        new() { Id = 2, FullName = "Demo Coach", Email = "coach@coachly.app", Password = "password123", Role = "Coach" }
-    ];
+#pragma warning disable CA1416
+    private const string AuthTokenKey = "auth.token";
 
     public event Action? AuthStateChanged;
 
@@ -17,63 +17,110 @@ public class AuthService
 
     public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
     {
-        await Task.Delay(200);
+        var normalizedRequest = new LoginRequestDto
+        {
+            Email = request.Email.Trim(),
+            Password = request.Password.Trim()
+        };
 
-        var user = _users.FirstOrDefault(u =>
-            u.Email.Equals(request.Email.Trim(), StringComparison.OrdinalIgnoreCase)
-            && u.Password == request.Password);
-
-        if (user is null)
+        var response = await httpClient.PostAsJsonAsync("api/auth/login", normalizedRequest);
+        if (!response.IsSuccessStatusCode)
         {
             return null;
         }
 
+        var dto = await response.Content.ReadFromJsonAsync<LoginResponseDto>();
+        if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
+        {
+            return null;
+        }
+
+        await SecureStorage.Default.SetAsync(AuthTokenKey, dto.Token);
+
         IsAuthenticated = true;
-        CurrentRole = user.Role;
+        CurrentRole = dto.Role;
         AuthStateChanged?.Invoke();
 
-        return new LoginResponseDto
-        {
-            UserId = user.Id,
-            Role = user.Role,
-            Token = $"demo-token-{user.Id}"
-        };
+        return dto;
     }
 
     public async Task<(bool IsSuccess, string? Error)> RegisterAsync(string fullName, string email, string password, string role)
     {
-        await Task.Delay(200);
-
-        if (_users.Any(u => u.Email.Equals(email.Trim(), StringComparison.OrdinalIgnoreCase)))
+        var request = new RegisterRequestDto
         {
-            return (false, "An account with this email already exists.");
-        }
-
-        _users.Add(new AppUser
-        {
-            Id = _users.Max(u => u.Id) + 1,
             FullName = fullName.Trim(),
             Email = email.Trim(),
-            Password = password,
+            Password = password.Trim(),
             Role = role
-        });
+        };
 
-        return (true, null);
+        var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
+        if (response.IsSuccessStatusCode)
+        {
+            return (true, null);
+        }
+
+        var error = await response.Content.ReadAsStringAsync();
+        return (false, string.IsNullOrWhiteSpace(error) ? "Registration failed." : error);
+    }
+
+    public async Task<(bool IsSuccess, string Error)> SignInWithGoogleAsync()
+    {
+        if (!providerOptions.EnableExternalProviderSignIn)
+        {
+            return (false, "Google sign-in is disabled until backend OAuth endpoints are fully configured.");
+        }
+
+        if (!providerOptions.IsGoogleConfigured)
+        {
+            return (false, "Configure GoogleClientId and BackendOAuthStartUrl in MauiProgram.");
+        }
+
+        return await StartExternalSignInAsync("google");
+    }
+
+    public async Task<(bool IsSuccess, string Error)> SignInWithAppleAsync()
+    {
+        if (!providerOptions.EnableExternalProviderSignIn)
+        {
+            return (false, "Apple sign-in is disabled until backend OAuth endpoints are fully configured.");
+        }
+
+        if (!providerOptions.IsAppleConfigured)
+        {
+            return (false, "Configure AppleClientId and BackendOAuthStartUrl in MauiProgram.");
+        }
+
+        return await StartExternalSignInAsync("apple");
+    }
+
+    private async Task<(bool IsSuccess, string Error)> StartExternalSignInAsync(string provider)
+    {
+        var startUrl = BuildExternalStartUrl(provider);
+
+        try
+        {
+            await Browser.Default.OpenAsync(startUrl, BrowserLaunchMode.SystemPreferred);
+            return (true, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not open browser for {provider} sign-in: {ex.Message}");
+        }
     }
 
     public void Logout()
     {
+        SecureStorage.Default.Remove(AuthTokenKey);
         IsAuthenticated = false;
         CurrentRole = string.Empty;
         AuthStateChanged?.Invoke();
     }
 
-    private sealed class AppUser
+    private string BuildExternalStartUrl(string provider)
     {
-        public int Id { get; set; }
-        public string FullName { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
-        public string Password { get; set; } = string.Empty;
-        public string Role { get; set; } = "Client";
+        var baseUrl = providerOptions.BackendOAuthStartUrl.TrimEnd('/');
+        return $"{baseUrl}/api/auth/external/{provider}/start";
     }
+#pragma warning restore CA1416
 }

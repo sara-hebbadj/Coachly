@@ -8,6 +8,8 @@
     xmlns:coach="clr-namespace:Coachly.Pages.Coach"
     Title="Coachly">
 
+    <MenuItem Text="Logout" Clicked="OnLogoutClicked" />
+
     <FlyoutItem x:Name="AuthGroup" Title="Account" Route="AuthRoot">
         <ShellContent Title="Login" ContentTemplate="{DataTemplate auth:LoginPage}" Route="Login" />
         <ShellContent Title="Register" ContentTemplate="{DataTemplate auth:RegisterPage}" Route="Register" />

@@ -59,7 +59,7 @@ public class RegisterViewModel : BaseViewModel
     {
         ErrorMessage = string.Empty;
 
-        var result = await _authService.RegisterAsync(FullName, Email, Password, SelectedRole);
+        var result = await _authService.RegisterAsync(FullName.Trim(), Email.Trim(), Password.Trim(), SelectedRole);
         if (!result.IsSuccess)
         {
             ErrorMessage = result.Error ?? "Registration failed.";

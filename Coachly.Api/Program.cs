@@ -44,7 +44,7 @@ app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Coachly API v1");
-    c.RoutePrefix = "swagger"; // https://localhost:7131/swagger
+    c.RoutePrefix = "swagger"; // http://10.0.2.2:5114/swagger
 });
 
 app.UseHttpsRedirection();
