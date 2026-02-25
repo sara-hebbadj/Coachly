@@ -283,6 +283,11 @@ public class AuthController : ControllerBase
 
     private string BuildAbsoluteUrl(string path)
     {
+        if (Uri.TryCreate(path, UriKind.Absolute, out var absoluteUri))
+        {
+            return absoluteUri.ToString();
+        }
+
         var normalizedPath = path.StartsWith('/') ? path : $"/{path}";
         return $"{Request.Scheme}://{Request.Host}{normalizedPath}";
     }

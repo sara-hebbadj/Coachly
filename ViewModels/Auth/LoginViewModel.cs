@@ -107,7 +107,14 @@ public class LoginViewModel : BaseViewModel
         if (!result.IsSuccess)
         {
             await Shell.Current.DisplayAlert("Google Sign-In", result.Error, "OK");
+            return;
         }
+
+        var route = string.Equals(_authService.CurrentRole, "Coach", StringComparison.OrdinalIgnoreCase)
+            ? "//CoachDashboard"
+            : "//ClientHome";
+
+        await Shell.Current.GoToAsync(route);
     }
 
     private async Task AppleSignInAsync()
@@ -126,7 +133,14 @@ public class LoginViewModel : BaseViewModel
         if (!result.IsSuccess)
         {
             await Shell.Current.DisplayAlert("Apple Sign-In", result.Error, "OK");
+            return;
         }
+
+        var route = string.Equals(_authService.CurrentRole, "Coach", StringComparison.OrdinalIgnoreCase)
+            ? "//CoachDashboard"
+            : "//ClientHome";
+
+        await Shell.Current.GoToAsync(route);
     }
 #pragma warning restore CA1416
 }

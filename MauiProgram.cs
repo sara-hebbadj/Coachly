@@ -31,12 +31,13 @@ namespace Coachly
                 Timeout = TimeSpan.FromSeconds(20)
             });
 
+            var oauthStartUrl = Environment.GetEnvironmentVariable("COACHLY_OAUTH_START_URL") ?? apiBaseUrl;
+            var mobileAuthCallbackUri = Environment.GetEnvironmentVariable("COACHLY_MOBILE_AUTH_CALLBACK_URI") ?? "coachly://auth-callback";
+
             builder.Services.AddSingleton(new AuthProviderOptions
             {
-                // Copy-paste your real provider values here.
-                GoogleClientId = "",
-                AppleClientId = "",
-                BackendOAuthStartUrl = apiBaseUrl,
+                BackendOAuthStartUrl = oauthStartUrl,
+                MobileAuthCallbackUri = mobileAuthCallbackUri,
                 EnableExternalProviderSignIn = true
             });
 
