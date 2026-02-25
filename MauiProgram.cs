@@ -34,10 +34,10 @@ namespace Coachly
             builder.Services.AddSingleton(new AuthProviderOptions
             {
                 // Copy-paste your real provider values here.
-                GoogleClientId = "79881017996-g2pi2eirmik36eu9r45m417mp6fkm77s.apps.googleusercontent.com",
+                GoogleClientId = "",
                 AppleClientId = "",
                 BackendOAuthStartUrl = apiBaseUrl,
-                EnableExternalProviderSignIn = false
+                EnableExternalProviderSignIn = true
             });
 
             builder.Services.AddSingleton<AuthService>();
