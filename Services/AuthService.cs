@@ -17,6 +17,7 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
 
     public bool IsAuthenticated { get; private set; }
     public string CurrentRole { get; private set; } = string.Empty;
+    public string? LastAuthError { get; private set; }
 
     public async Task InitializeAuthStateAsync()
     {
@@ -48,47 +49,102 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
 
     public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
     {
-        var normalizedRequest = new LoginRequestDto
+        try
         {
-            Email = request.Email.Trim(),
-            Password = request.Password.Trim()
-        };
+            var token = await SecureStorage.Default.GetAsync(AuthTokenKey);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return;
+            }
 
-        var response = await httpClient.PostAsJsonAsync("api/auth/login", normalizedRequest);
-        if (!response.IsSuccessStatusCode)
-        {
-            return null;
+            var session = await GetSessionAsync(token);
+            if (session is null)
+            {
+                Logout();
+                return;
+            }
+
+            IsAuthenticated = true;
+            CurrentRole = session.Role;
+            await SecureStorage.Default.SetAsync(AuthRoleKey, session.Role);
+            AuthStateChanged?.Invoke();
         }
-
-        var dto = await response.Content.ReadFromJsonAsync<LoginResponseDto>();
-        if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
+        catch
         {
-            return null;
+            Logout();
         }
+    }
 
+    public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
+    {
+        LastAuthError = null;
+
+        try
+        {
+            var normalizedRequest = new LoginRequestDto
+            {
+                Email = request.Email.Trim(),
+                Password = request.Password.Trim()
+            };
+
+            var response = await httpClient.PostAsJsonAsync("api/auth/login", normalizedRequest);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var dto = await response.Content.ReadFromJsonAsync<LoginResponseDto>();
+            if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
+            {
+                return null;
+            }
         await SaveLoginAsync(dto.Token, dto.Role);
 
-        return dto;
+            await SaveLoginAsync(dto.Token, dto.Role);
+
+            return dto;
+        }
+        catch (HttpRequestException)
+        {
+            LastAuthError = "Could not reach the API server. Ensure Coachly.Api is running and reachable from the emulator.";
+            return null;
+        }
+        catch (TaskCanceledException)
+        {
+            LastAuthError = "Request timed out while contacting the API server.";
+            return null;
+        }
     }
 
     public async Task<(bool IsSuccess, string? Error)> RegisterAsync(string fullName, string email, string password, string role)
     {
-        var request = new RegisterRequestDto
+        try
         {
-            FullName = fullName.Trim(),
-            Email = email.Trim(),
-            Password = password.Trim(),
-            Role = role
-        };
+            var request = new RegisterRequestDto
+            {
+                FullName = fullName.Trim(),
+                Email = email.Trim(),
+                Password = password.Trim(),
+                Role = role
+            };
 
-        var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
-        if (response.IsSuccessStatusCode)
-        {
-            return (true, null);
+            var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return (false, string.IsNullOrWhiteSpace(error) ? "Registration failed." : error);
         }
-
-        var error = await response.Content.ReadAsStringAsync();
-        return (false, string.IsNullOrWhiteSpace(error) ? "Registration failed." : error);
+        catch (HttpRequestException)
+        {
+            return (false, "Could not reach the API server. Ensure Coachly.Api is running and reachable from the emulator.");
+        }
+        catch (TaskCanceledException)
+        {
+            return (false, "Request timed out while contacting the API server.");
+        }
     }
 
     public async Task<(bool IsSuccess, string Error)> SignInWithGoogleAsync()
