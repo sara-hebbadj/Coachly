@@ -4,7 +4,7 @@ using Coachly.Shared.DTOs;
 
 namespace Coachly.ViewModels.Auth;
 
-public class LoginViewModel : BaseViewModel
+public partial class LoginViewModel : BaseViewModel
 {
 #pragma warning disable CA1416
     private readonly AuthService _authService;
@@ -20,7 +20,7 @@ public class LoginViewModel : BaseViewModel
         LoginCommand = new Command(async () => await LoginAsync(), () => !IsBusy);
         GoogleSignInCommand = new Command(async () => await GoogleSignInAsync(), () => !IsBusy);
         AppleSignInCommand = new Command(async () => await AppleSignInAsync(), () => !IsBusy);
-        GoToRegisterCommand = new Command(async () => await Shell.Current.GoToAsync("//Register"));
+        GoToRegisterCommand = new Command(async () => await NavigateToAsync("//Register"));
     }
 
     public string Email
@@ -80,7 +80,9 @@ public class LoginViewModel : BaseViewModel
 
         if (response is null)
         {
-            ErrorMessage = "Invalid email or password.";
+            ErrorMessage = string.IsNullOrWhiteSpace(_authService.LastAuthError)
+                ? "Invalid email or password."
+                : _authService.LastAuthError;
             return;
         }
 
@@ -88,7 +90,7 @@ public class LoginViewModel : BaseViewModel
             ? "//CoachDashboard"
             : "//ClientHome";
 
-        await Shell.Current.GoToAsync(route);
+        await NavigateToAsync(route);
     }
 
     private async Task GoogleSignInAsync()
@@ -106,7 +108,7 @@ public class LoginViewModel : BaseViewModel
 
         if (!result.IsSuccess)
         {
-            await Shell.Current.DisplayAlert("Google Sign-In", result.Error, "OK");
+            await ShowAlertAsync("Google Sign-In", result.Error);
             return;
         }
 
@@ -114,7 +116,7 @@ public class LoginViewModel : BaseViewModel
             ? "//CoachDashboard"
             : "//ClientHome";
 
-        await Shell.Current.GoToAsync(route);
+        await NavigateToAsync(route);
     }
 
     private async Task AppleSignInAsync()
@@ -132,7 +134,7 @@ public class LoginViewModel : BaseViewModel
 
         if (!result.IsSuccess)
         {
-            await Shell.Current.DisplayAlert("Apple Sign-In", result.Error, "OK");
+            await ShowAlertAsync("Apple Sign-In", result.Error);
             return;
         }
 
@@ -140,7 +142,19 @@ public class LoginViewModel : BaseViewModel
             ? "//CoachDashboard"
             : "//ClientHome";
 
-        await Shell.Current.GoToAsync(route);
+        await NavigateToAsync(route);
     }
+    private static Task NavigateToAsync(string route)
+    {
+        var shell = Shell.Current;
+        return shell is null ? Task.CompletedTask : shell.GoToAsync(route);
+    }
+
+    private static Task ShowAlertAsync(string title, string message)
+    {
+        var shell = Shell.Current;
+        return shell is null ? Task.CompletedTask : shell.DisplayAlert(title, message, "OK");
+    }
+
 #pragma warning restore CA1416
 }
