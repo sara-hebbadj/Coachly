@@ -49,6 +49,34 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
 
     public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
     {
+        try
+        {
+            var token = await SecureStorage.Default.GetAsync(AuthTokenKey);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return;
+            }
+
+            var session = await GetSessionAsync(token);
+            if (session is null)
+            {
+                Logout();
+                return;
+            }
+
+            IsAuthenticated = true;
+            CurrentRole = session.Role;
+            await SecureStorage.Default.SetAsync(AuthRoleKey, session.Role);
+            AuthStateChanged?.Invoke();
+        }
+        catch
+        {
+            Logout();
+        }
+    }
+
+    public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
+    {
         LastAuthError = null;
 
         try
@@ -70,6 +98,7 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
             {
                 return null;
             }
+        await SaveLoginAsync(dto.Token, dto.Role);
 
             await SaveLoginAsync(dto.Token, dto.Role);
 
