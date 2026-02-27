@@ -10,6 +10,8 @@ public partial class App : Application
     {
         InitializeComponent();
         _authService = authService;
+
+        _ = _authService.InitializeAuthStateAsync();
     }
 
     protected override Window CreateWindow(IActivationState? activationState)

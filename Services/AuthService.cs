@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Json;
+﻿using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using Coachly.Shared.DTOs;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Authentication;
@@ -10,11 +11,40 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
 {
 #pragma warning disable CA1416
     private const string AuthTokenKey = "auth.token";
+    private const string AuthRoleKey = "auth.role";
 
     public event Action? AuthStateChanged;
 
     public bool IsAuthenticated { get; private set; }
     public string CurrentRole { get; private set; } = string.Empty;
+
+    public async Task InitializeAuthStateAsync()
+    {
+        try
+        {
+            var token = await SecureStorage.Default.GetAsync(AuthTokenKey);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return;
+            }
+
+            var session = await GetSessionAsync(token);
+            if (session is null)
+            {
+                Logout();
+                return;
+            }
+
+            IsAuthenticated = true;
+            CurrentRole = session.Role;
+            await SecureStorage.Default.SetAsync(AuthRoleKey, session.Role);
+            AuthStateChanged?.Invoke();
+        }
+        catch
+        {
+            Logout();
+        }
+    }
 
     public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
     {
@@ -36,11 +66,7 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
             return null;
         }
 
-        await SecureStorage.Default.SetAsync(AuthTokenKey, dto.Token);
-
-        IsAuthenticated = true;
-        CurrentRole = dto.Role;
-        AuthStateChanged?.Invoke();
+        await SaveLoginAsync(dto.Token, dto.Role);
 
         return dto;
     }
@@ -118,10 +144,7 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
                 ? roleValue
                 : "Client";
 
-            await SecureStorage.Default.SetAsync(AuthTokenKey, token);
-            IsAuthenticated = true;
-            CurrentRole = role;
-            AuthStateChanged?.Invoke();
+            await SaveLoginAsync(token, role);
 
             return (true, string.Empty);
         }
@@ -143,9 +166,34 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
     public void Logout()
     {
         SecureStorage.Default.Remove(AuthTokenKey);
+        SecureStorage.Default.Remove(AuthRoleKey);
         IsAuthenticated = false;
         CurrentRole = string.Empty;
         AuthStateChanged?.Invoke();
+    }
+
+    private async Task SaveLoginAsync(string token, string role)
+    {
+        await SecureStorage.Default.SetAsync(AuthTokenKey, token);
+        await SecureStorage.Default.SetAsync(AuthRoleKey, role);
+
+        IsAuthenticated = true;
+        CurrentRole = role;
+        AuthStateChanged?.Invoke();
+    }
+
+    private async Task<LoginResponseDto?> GetSessionAsync(string token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/auth/session");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await httpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<LoginResponseDto>();
     }
 
     private string BuildExternalStartUrl(string provider)

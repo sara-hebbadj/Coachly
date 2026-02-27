@@ -5,12 +5,6 @@ using System.Text.Json.Serialization;
 Microsoft.AspNetCore.Builder.WebApplicationBuilder builder =
     Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
 
-
-// =======================
-// SERVICES
-// =======================
-
-// Controllers + JSON (prevents EF loop crashes in Swagger)
 builder.Services
     .AddControllers()
     .AddJsonOptions(options =>
@@ -19,38 +13,30 @@ builder.Services
             ReferenceHandler.IgnoreCycles;
     });
 
-// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHttpClient();
+builder.Services.AddDataProtection();
 
-// Database
 builder.Services.AddDbContext<CoachlyDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection")
     )
 );
 
-// =======================
-// APP
-// =======================
-
 var app = builder.Build();
 
-// Developer exception page (important while building)
 app.UseDeveloperExceptionPage();
 
-// Swagger
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Coachly API v1");
-    c.RoutePrefix = "swagger"; // http://10.0.2.2:5114/swagger
+    c.RoutePrefix = "swagger";
 });
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
-
-// IMPORTANT: this must be ON once you have controllers
- app.MapControllers();
+app.MapControllers();
 
 app.Run();
