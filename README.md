@@ -4,9 +4,18 @@ Coachly is a booking and membership management platform for coaches.
 
 Status: In active development.
 
-## Google OAuth setup (API + MAUI app)
+## Auth flow status
 
-To allow users to register/login with Google, configure both the API and the mobile app callback.
+The app now supports:
+
+- Register/login with email + password via `api/auth/register` and `api/auth/login`.
+- Session restore after app restart (token in secure storage + `api/auth/session` validation).
+- Google OAuth login via API callback relay to MAUI custom URI.
+- Apple OAuth login via API callback relay to MAUI custom URI.
+
+User records are persisted to the API database (`Users` table through EF Core), so registrations and external logins are saved for developer visibility in SQL tooling.
+
+## Google OAuth setup (API + MAUI app)
 
 ### 1) Create Google OAuth credentials
 
@@ -24,6 +33,20 @@ Set these values in `Coachly.Api/appsettings.Development.json` (or user secrets 
 - `ExternalAuth:Google:ClientSecret`
 - `ExternalAuth:Google:CallbackPath` (default: `/api/auth/external/google/callback`)
 
+## Apple OAuth setup (API + MAUI app)
+
+Set these values in `Coachly.Api/appsettings.Development.json` (or user secrets / environment variables):
+
+- `ExternalAuth:Apple:ClientId` (Service ID)
+- `ExternalAuth:Apple:TeamId`
+- `ExternalAuth:Apple:KeyId`
+- `ExternalAuth:Apple:PrivateKey` (PEM contents)
+- `ExternalAuth:Apple:CallbackPath` (default: `/api/auth/external/apple/callback`)
+
+Also register callback URL in Apple Developer settings:
+
+- `http://localhost:5114/api/auth/external/apple/callback`
+
 ### 3) Configure the MAUI app
 
 Optional environment variables (defaults shown):
@@ -32,3 +55,13 @@ Optional environment variables (defaults shown):
 - `COACHLY_MOBILE_AUTH_CALLBACK_URI` (default: `coachly://auth-callback`)
 
 The app is preconfigured to handle `coachly://auth-callback` on Android/iOS.
+
+
+## Demo accounts (auto-seeded in Development)
+
+When the API starts, it seeds these users if they do not already exist:
+
+- `client@coachly.demo` / `password123` (Client)
+- `coach@coachly.demo` / `password123` (Coach)
+
+For Android emulator local development, the app uses `http://10.0.2.2:5114/`. HTTPS redirection is disabled in Development to avoid emulator certificate/redirect issues.

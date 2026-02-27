@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Json;
+﻿using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using Coachly.Shared.DTOs;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Authentication;
@@ -10,59 +11,120 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
 {
 #pragma warning disable CA1416
     private const string AuthTokenKey = "auth.token";
+    private const string AuthRoleKey = "auth.role";
 
     public event Action? AuthStateChanged;
 
     public bool IsAuthenticated { get; private set; }
     public string CurrentRole { get; private set; } = string.Empty;
+    public string? LastAuthError { get; private set; }
+
+    public async Task InitializeAuthStateAsync()
+    {
+        try
+        {
+            var token = await SecureStorage.Default.GetAsync(AuthTokenKey);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return;
+            }
+
+            var session = await GetSessionAsync(token);
+            if (session is null)
+            {
+                Logout();
+                return;
+            }
+
+            IsAuthenticated = true;
+            CurrentRole = session.Role;
+            await SecureStorage.Default.SetAsync(AuthRoleKey, session.Role);
+            AuthStateChanged?.Invoke();
+        }
+        catch
+        {
+            Logout();
+        }
+    }
 
     public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
     {
-        var normalizedRequest = new LoginRequestDto
-        {
-            Email = request.Email.Trim(),
-            Password = request.Password.Trim()
-        };
+        LastAuthError = null;
 
-        var response = await httpClient.PostAsJsonAsync("api/auth/login", normalizedRequest);
-        if (!response.IsSuccessStatusCode)
+        try
         {
+            var normalizedRequest = new LoginRequestDto
+            {
+                Email = request.Email.Trim(),
+                Password = request.Password.Trim()
+            };
+
+            var response = await httpClient.PostAsJsonAsync("api/auth/login", normalizedRequest);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var dto = await response.Content.ReadFromJsonAsync<LoginResponseDto>();
+            if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
+            {
+                return null;
+            }
+
+            await SaveLoginAsync(dto.Token, dto.Role);
+
+            return dto;
+        }
+        catch (HttpRequestException)
+        {
+            LastAuthError = "Could not reach the API server. Ensure Coachly.Api is running and reachable from the emulator.";
             return null;
         }
-
-        var dto = await response.Content.ReadFromJsonAsync<LoginResponseDto>();
-        if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
+        catch (TaskCanceledException)
         {
+            LastAuthError = "Request timed out while contacting the API server.";
             return null;
         }
-
-        await SecureStorage.Default.SetAsync(AuthTokenKey, dto.Token);
-
-        IsAuthenticated = true;
-        CurrentRole = dto.Role;
-        AuthStateChanged?.Invoke();
-
-        return dto;
+        catch (Exception ex)
+        {
+            LastAuthError = $"Unexpected login error: {ex.Message}";
+            return null;
+        }
     }
 
     public async Task<(bool IsSuccess, string? Error)> RegisterAsync(string fullName, string email, string password, string role)
     {
-        var request = new RegisterRequestDto
+        try
         {
-            FullName = fullName.Trim(),
-            Email = email.Trim(),
-            Password = password.Trim(),
-            Role = role
-        };
+            var request = new RegisterRequestDto
+            {
+                FullName = fullName.Trim(),
+                Email = email.Trim(),
+                Password = password.Trim(),
+                Role = role
+            };
 
-        var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
-        if (response.IsSuccessStatusCode)
-        {
-            return (true, null);
+            var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return (false, string.IsNullOrWhiteSpace(error) ? "Registration failed." : error);
         }
-
-        var error = await response.Content.ReadAsStringAsync();
-        return (false, string.IsNullOrWhiteSpace(error) ? "Registration failed." : error);
+        catch (HttpRequestException)
+        {
+            return (false, "Could not reach the API server. Ensure Coachly.Api is running and reachable from the emulator.");
+        }
+        catch (TaskCanceledException)
+        {
+            return (false, "Request timed out while contacting the API server.");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Unexpected registration error: {ex.Message}");
+        }
     }
 
     public async Task<(bool IsSuccess, string Error)> SignInWithGoogleAsync()
@@ -118,10 +180,7 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
                 ? roleValue
                 : "Client";
 
-            await SecureStorage.Default.SetAsync(AuthTokenKey, token);
-            IsAuthenticated = true;
-            CurrentRole = role;
-            AuthStateChanged?.Invoke();
+            await SaveLoginAsync(token, role);
 
             return (true, string.Empty);
         }
@@ -143,9 +202,34 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
     public void Logout()
     {
         SecureStorage.Default.Remove(AuthTokenKey);
+        SecureStorage.Default.Remove(AuthRoleKey);
         IsAuthenticated = false;
         CurrentRole = string.Empty;
         AuthStateChanged?.Invoke();
+    }
+
+    private async Task SaveLoginAsync(string token, string role)
+    {
+        await SecureStorage.Default.SetAsync(AuthTokenKey, token);
+        await SecureStorage.Default.SetAsync(AuthRoleKey, role);
+
+        IsAuthenticated = true;
+        CurrentRole = role;
+        AuthStateChanged?.Invoke();
+    }
+
+    private async Task<LoginResponseDto?> GetSessionAsync(string token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/auth/session");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await httpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<LoginResponseDto>();
     }
 
     private string BuildExternalStartUrl(string provider)

@@ -1,10 +1,12 @@
-﻿using System.Windows.Input;
+﻿using System;
+using System.Windows.Input;
 using Coachly.Services;
 
 namespace Coachly.ViewModels.Auth;
 
-public class RegisterViewModel : BaseViewModel
+public partial class RegisterViewModel : BaseViewModel
 {
+#pragma warning disable CA1416
     private readonly AuthService _authService;
 
     private string _fullName = string.Empty;
@@ -18,11 +20,15 @@ public class RegisterViewModel : BaseViewModel
         _authService = authService;
         Roles = ["Client", "Coach"];
         RegisterCommand = new Command(async () => await RegisterAsync());
-        GoToLoginCommand = new Command(async () => await Shell.Current.GoToAsync("//Login"));
+        GoogleSignInCommand = new Command(async () => await GoogleSignInAsync());
+        AppleSignInCommand = new Command(async () => await AppleSignInAsync());
+        GoToLoginCommand = new Command(async () => await NavigateToAsync("//Login"));
     }
 
     public List<string> Roles { get; }
     public ICommand RegisterCommand { get; }
+    public ICommand GoogleSignInCommand { get; }
+    public ICommand AppleSignInCommand { get; }
     public ICommand GoToLoginCommand { get; }
 
     public string FullName
@@ -66,7 +72,56 @@ public class RegisterViewModel : BaseViewModel
             return;
         }
 
-        await Shell.Current.DisplayAlert("Success", "Your account is ready. Please login.", "OK");
-        await Shell.Current.GoToAsync("//Login");
+        await ShowAlertAsync("Success", "Your account is ready. Please login.");
+        await NavigateToAsync("//Login");
     }
+
+    private async Task GoogleSignInAsync()
+    {
+        ErrorMessage = string.Empty;
+
+        var result = await _authService.SignInWithGoogleAsync();
+        if (!result.IsSuccess)
+        {
+            ErrorMessage = result.Error;
+            return;
+        }
+
+        var route = string.Equals(_authService.CurrentRole, "Coach", StringComparison.OrdinalIgnoreCase)
+            ? "//CoachDashboard"
+            : "//ClientHome";
+
+        await NavigateToAsync(route);
+    }
+
+    private async Task AppleSignInAsync()
+    {
+        ErrorMessage = string.Empty;
+
+        var result = await _authService.SignInWithAppleAsync();
+        if (!result.IsSuccess)
+        {
+            ErrorMessage = result.Error;
+            return;
+        }
+
+        var route = string.Equals(_authService.CurrentRole, "Coach", StringComparison.OrdinalIgnoreCase)
+            ? "//CoachDashboard"
+            : "//ClientHome";
+
+        await NavigateToAsync(route);
+    }
+
+    private static Task NavigateToAsync(string route)
+    {
+        var shell = Shell.Current;
+        return shell is null ? Task.CompletedTask : shell.GoToAsync(route);
+    }
+
+    private static Task ShowAlertAsync(string title, string message)
+    {
+        var shell = Shell.Current;
+        return shell is null ? Task.CompletedTask : shell.DisplayAlert(title, message, "OK");
+    }
+#pragma warning restore CA1416
 }

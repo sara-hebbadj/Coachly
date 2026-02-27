@@ -25,6 +25,7 @@
 		<SingleProject>true</SingleProject>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
 		<!-- App Identity -->
 		<ApplicationTitle>Coachly</ApplicationTitle>
