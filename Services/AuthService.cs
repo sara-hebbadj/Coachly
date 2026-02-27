@@ -71,60 +71,6 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
                 return null;
             }
 
-
-    public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
-    {
-        try
-        {
-            var token = await SecureStorage.Default.GetAsync(AuthTokenKey);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                return;
-            }
-
-            var session = await GetSessionAsync(token);
-            if (session is null)
-            {
-                Logout();
-                return;
-            }
-
-            IsAuthenticated = true;
-            CurrentRole = session.Role;
-            await SecureStorage.Default.SetAsync(AuthRoleKey, session.Role);
-            AuthStateChanged?.Invoke();
-        }
-        catch
-        {
-            Logout();
-        }
-    }
-
-    public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
-    {
-        LastAuthError = null;
-
-        try
-        {
-            var normalizedRequest = new LoginRequestDto
-            {
-                Email = request.Email.Trim(),
-                Password = request.Password.Trim()
-            };
-
-            var response = await httpClient.PostAsJsonAsync("api/auth/login", normalizedRequest);
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
-
-            var dto = await response.Content.ReadFromJsonAsync<LoginResponseDto>();
-            if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
-            {
-                return null;
-            }
-        await SaveLoginAsync(dto.Token, dto.Role);
-
             await SaveLoginAsync(dto.Token, dto.Role);
 
             return dto;
@@ -137,6 +83,11 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
         catch (TaskCanceledException)
         {
             LastAuthError = "Request timed out while contacting the API server.";
+            return null;
+        }
+        catch (Exception ex)
+        {
+            LastAuthError = $"Unexpected login error: {ex.Message}";
             return null;
         }
     }
@@ -159,13 +110,6 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
                 return (true, null);
             }
 
-
-            var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
-            if (response.IsSuccessStatusCode)
-            {
-                return (true, null);
-            }
-
             var error = await response.Content.ReadAsStringAsync();
             return (false, string.IsNullOrWhiteSpace(error) ? "Registration failed." : error);
         }
@@ -176,6 +120,10 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
         catch (TaskCanceledException)
         {
             return (false, "Request timed out while contacting the API server.");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Unexpected registration error: {ex.Message}");
         }
     }
 

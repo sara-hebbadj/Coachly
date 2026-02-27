@@ -157,6 +157,28 @@
                                 FontAttributes="Bold"
                                 FontSize="15" />
 
+                        <Label Text="Or continue with"
+                               FontSize="12"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light=#6B7280, Dark=#B6BDCD}" />
+
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Button Grid.Column="0"
+                                    Text="Google"
+                                    Command="{Binding GoogleSignInCommand}"
+                                    HeightRequest="46"
+                                    CornerRadius="12"
+                                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#242431}"
+                                    TextColor="{AppThemeBinding Light=#111827, Dark=#F8FAFC}" />
+                            <Button Grid.Column="1"
+                                    Text="Apple"
+                                    Command="{Binding AppleSignInCommand}"
+                                    HeightRequest="46"
+                                    CornerRadius="12"
+                                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#242431}"
+                                    TextColor="{AppThemeBinding Light=#111827, Dark=#F8FAFC}" />
+                        </Grid>
+
                         <HorizontalStackLayout Spacing="6" HorizontalOptions="Center">
                             <Label Text="Already have an account?"
                                    VerticalTextAlignment="Center"
