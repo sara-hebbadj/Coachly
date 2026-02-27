@@ -55,3 +55,13 @@ Optional environment variables (defaults shown):
 - `COACHLY_MOBILE_AUTH_CALLBACK_URI` (default: `coachly://auth-callback`)
 
 The app is preconfigured to handle `coachly://auth-callback` on Android/iOS.
+
+
+## Demo accounts (auto-seeded in Development)
+
+When the API starts, it seeds these users if they do not already exist:
+
+- `client@coachly.demo` / `password123` (Client)
+- `coach@coachly.demo` / `password123` (Coach)
+
+For Android emulator local development, the app uses `http://10.0.2.2:5114/`. HTTPS redirection is disabled in Development to avoid emulator certificate/redirect issues.
