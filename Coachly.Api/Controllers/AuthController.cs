@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -35,7 +36,7 @@ public class AuthController : ControllerBase
         _db = db;
         _configuration = configuration;
         _httpClientFactory = httpClientFactory;
-        _stateProtector = dataProtectionProvider.CreateProtector("coachly.oauth.google.state.v1");
+        _stateProtector = dataProtectionProvider.CreateProtector("coachly.oauth.state.v1");
     }
 
     [HttpPost("register")]
@@ -52,7 +53,7 @@ public class AuthController : ControllerBase
         var user = new User
         {
             FullName = request.FullName.Trim(),
-            Email = request.Email.Trim(),
+            Email = normalizedEmail,
             PasswordHash = Hash(request.Password),
             Role = role,
             CreatedAt = DateTime.UtcNow
@@ -80,12 +81,29 @@ public class AuthController : ControllerBase
             return Unauthorized("Invalid email or password.");
         }
 
-        return Ok(new LoginResponseDto
+        return Ok(ToLoginResponse(user));
+    }
+
+    [HttpGet("session")]
+    public async Task<ActionResult<LoginResponseDto>> GetSession()
+    {
+        var token = Request.Headers.Authorization
+            .FirstOrDefault(h => h.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            ?.Substring("Bearer ".Length)
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(token))
         {
-            UserId = user.Id,
-            Role = user.Role,
-            Token = BuildAppToken(user)
-        });
+            return Unauthorized("Missing bearer token.");
+        }
+
+        var user = await TryResolveTokenUserAsync(token);
+        if (user is null)
+        {
+            return Unauthorized("Invalid token.");
+        }
+
+        return Ok(ToLoginResponse(user));
     }
 
     [HttpGet("external/google/start")]
@@ -100,22 +118,14 @@ public class AuthController : ControllerBase
                 "Google OAuth is not configured on the API (missing ExternalAuth:Google:ClientId).");
         }
 
-        var mobileCallbackUrl = string.IsNullOrWhiteSpace(mobileCallback)
-            ? "coachly://auth-callback"
-            : mobileCallback;
-
+        var mobileCallbackUrl = ResolveMobileCallback(mobileCallback);
         if (!IsAllowedMobileCallback(mobileCallbackUrl))
         {
             return BadRequest("Invalid mobile callback URL.");
         }
 
         var redirectUri = BuildAbsoluteUrl(callbackPath);
-        var protectedState = _stateProtector.Protect(JsonSerializer.Serialize(new OAuthStatePayload
-        {
-            MobileCallback = mobileCallbackUrl,
-            IssuedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            Nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(16))
-        }));
+        var protectedState = BuildState(mobileCallbackUrl, "google");
 
         var query = new Dictionary<string, string?>
         {
@@ -132,24 +142,56 @@ public class AuthController : ControllerBase
         return Redirect(authorizeUrl);
     }
 
+    [HttpGet("external/apple/start")]
+    public IActionResult AppleStart([FromQuery] string? mobileCallback)
+    {
+        var clientId = _configuration["ExternalAuth:Apple:ClientId"];
+        var callbackPath = _configuration["ExternalAuth:Apple:CallbackPath"] ?? "/api/auth/external/apple/callback";
+
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                "Apple OAuth is not configured on the API (missing ExternalAuth:Apple:ClientId).");
+        }
+
+        var mobileCallbackUrl = ResolveMobileCallback(mobileCallback);
+        if (!IsAllowedMobileCallback(mobileCallbackUrl))
+        {
+            return BadRequest("Invalid mobile callback URL.");
+        }
+
+        var redirectUri = BuildAbsoluteUrl(callbackPath);
+        var protectedState = BuildState(mobileCallbackUrl, "apple");
+
+        var query = new Dictionary<string, string?>
+        {
+            ["client_id"] = clientId,
+            ["redirect_uri"] = redirectUri,
+            ["response_type"] = "code id_token",
+            ["response_mode"] = "form_post",
+            ["scope"] = "name email",
+            ["state"] = protectedState,
+            ["nonce"] = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant()
+        };
+
+        var authorizeUrl = QueryHelpers.AddQueryString("https://appleid.apple.com/auth/authorize", query);
+        return Redirect(authorizeUrl);
+    }
+
     [HttpGet("external/google/callback")]
     public async Task<IActionResult> GoogleCallback([FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
     {
-        var mobileCallback = TryResolveMobileCallback(state) ?? "coachly://auth-callback";
+        var statePayload = TryResolveState(state);
+        var mobileCallback = statePayload?.MobileCallback ?? "coachly://auth-callback";
 
         if (!string.IsNullOrWhiteSpace(error))
         {
             return RedirectWithError(mobileCallback, $"Google auth error: {error}");
         }
 
-        if (string.IsNullOrWhiteSpace(code))
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(statePayload?.MobileCallback))
         {
-            return RedirectWithError(mobileCallback, "Missing OAuth code.");
-        }
-
-        if (string.IsNullOrWhiteSpace(state))
-        {
-            return RedirectWithError(mobileCallback, "Missing OAuth state.");
+            return RedirectWithError(mobileCallback, "Missing OAuth state/code.");
         }
 
         var clientId = _configuration["ExternalAuth:Google:ClientId"];
@@ -205,24 +247,96 @@ public class AuthController : ControllerBase
             return RedirectWithError(mobileCallback, "Google account email is not verified.");
         }
 
-        var normalizedEmail = googleUser.Email.Trim().ToLowerInvariant();
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+        var user = await UpsertExternalUserAsync(googleUser.Email, googleUser.Name, "google");
 
-        if (user is null)
+        return RedirectWithSuccess(mobileCallback, user, "google");
+    }
+
+    [HttpGet("external/apple/callback")]
+    public async Task<IActionResult> AppleCallbackGet([FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? id_token, [FromQuery] string? error)
+        => await AppleCallbackInternal(code, state, id_token, error);
+
+    [HttpPost("external/apple/callback")]
+    public async Task<IActionResult> AppleCallbackPost([FromForm] string? code, [FromForm] string? state, [FromForm] string? id_token, [FromForm] string? error)
+        => await AppleCallbackInternal(code, state, id_token, error);
+
+    private async Task<IActionResult> AppleCallbackInternal(string? code, string? state, string? idTokenFromAuth, string? error)
+    {
+        var statePayload = TryResolveState(state);
+        var mobileCallback = statePayload?.MobileCallback ?? "coachly://auth-callback";
+
+        if (!string.IsNullOrWhiteSpace(error))
         {
-            user = new User
-            {
-                FullName = string.IsNullOrWhiteSpace(googleUser.Name) ? googleUser.Email : googleUser.Name,
-                Email = normalizedEmail,
-                PasswordHash = Hash(Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)),
-                Role = "Client",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync();
+            return RedirectWithError(mobileCallback, $"Apple auth error: {error}");
         }
 
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(statePayload?.MobileCallback))
+        {
+            return RedirectWithError(mobileCallback, "Missing OAuth state/code.");
+        }
+
+        var clientId = _configuration["ExternalAuth:Apple:ClientId"];
+        var teamId = _configuration["ExternalAuth:Apple:TeamId"];
+        var keyId = _configuration["ExternalAuth:Apple:KeyId"];
+        var privateKey = _configuration["ExternalAuth:Apple:PrivateKey"];
+        var callbackPath = _configuration["ExternalAuth:Apple:CallbackPath"] ?? "/api/auth/external/apple/callback";
+
+        if (new[] { clientId, teamId, keyId, privateKey }.Any(string.IsNullOrWhiteSpace))
+        {
+            return RedirectWithError(mobileCallback, "Apple OAuth is not configured on API (missing client/team/key/private key settings).");
+        }
+
+        var redirectUri = BuildAbsoluteUrl(callbackPath);
+        var clientSecret = BuildAppleClientSecret(clientId!, teamId!, keyId!, privateKey!);
+
+        var http = _httpClientFactory.CreateClient();
+        var tokenRequest = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["code"] = code,
+            ["client_id"] = clientId!,
+            ["client_secret"] = clientSecret,
+            ["redirect_uri"] = redirectUri,
+            ["grant_type"] = "authorization_code"
+        });
+
+        var tokenResponse = await http.PostAsync("https://appleid.apple.com/auth/token", tokenRequest);
+        if (!tokenResponse.IsSuccessStatusCode)
+        {
+            return RedirectWithError(mobileCallback, "Apple token exchange failed.");
+        }
+
+        var tokenPayload = await tokenResponse.Content.ReadFromJsonAsync<AppleTokenResponse>();
+        var idToken = tokenPayload?.IdToken ?? idTokenFromAuth;
+
+        if (string.IsNullOrWhiteSpace(idToken))
+        {
+            return RedirectWithError(mobileCallback, "Apple did not return an identity token.");
+        }
+
+        var idClaims = ParseJwtPayload(idToken);
+        if (idClaims is null)
+        {
+            return RedirectWithError(mobileCallback, "Apple identity token is invalid.");
+        }
+
+        var email = idClaims.Email;
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            if (string.IsNullOrWhiteSpace(idClaims.Subject))
+            {
+                return RedirectWithError(mobileCallback, "Apple account did not provide an email or stable subject identifier.");
+            }
+
+            email = $"{idClaims.Subject}@appleid.local";
+        }
+
+        var user = await UpsertExternalUserAsync(email, idClaims.NameOrEmail, "apple");
+
+        return RedirectWithSuccess(mobileCallback, user, "apple");
+    }
+
+    private IActionResult RedirectWithSuccess(string mobileCallback, User user, string provider)
+    {
         var appToken = BuildAppToken(user);
 
         var successUrl = QueryHelpers.AddQueryString(mobileCallback, new Dictionary<string, string?>
@@ -230,7 +344,7 @@ public class AuthController : ControllerBase
             ["token"] = appToken,
             ["role"] = user.Role,
             ["userId"] = user.Id.ToString(CultureInfo.InvariantCulture),
-            ["provider"] = "google"
+            ["provider"] = provider
         });
 
         return Redirect(successUrl);
@@ -246,7 +360,16 @@ public class AuthController : ControllerBase
         return Redirect(url);
     }
 
-    private string? TryResolveMobileCallback(string? protectedState)
+    private string BuildState(string mobileCallback, string provider)
+        => _stateProtector.Protect(JsonSerializer.Serialize(new OAuthStatePayload
+        {
+            MobileCallback = mobileCallback,
+            Provider = provider,
+            IssuedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            Nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(16))
+        }));
+
+    private OAuthStatePayload? TryResolveState(string? protectedState)
     {
         if (string.IsNullOrWhiteSpace(protectedState))
         {
@@ -269,7 +392,7 @@ public class AuthController : ControllerBase
             }
 
             return IsAllowedMobileCallback(payload.MobileCallback)
-                ? payload.MobileCallback
+                ? payload
                 : null;
         }
         catch
@@ -278,8 +401,74 @@ public class AuthController : ControllerBase
         }
     }
 
+    private async Task<User> UpsertExternalUserAsync(string email, string? fullName, string provider)
+    {
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+
+        if (user is not null)
+        {
+            return user;
+        }
+
+        user = new User
+        {
+            FullName = string.IsNullOrWhiteSpace(fullName) ? normalizedEmail : fullName.Trim(),
+            Email = normalizedEmail,
+            PasswordHash = Hash($"{provider}-{Guid.NewGuid():N}"),
+            Role = "Client",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        return user;
+    }
+
+    private async Task<User?> TryResolveTokenUserAsync(string token)
+    {
+        if (!TryParseAppToken(token, out var userId, out var role))
+        {
+            return null;
+        }
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        if (user is null || !string.Equals(user.Role, role, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return user;
+    }
+
+    private static bool TryParseAppToken(string token, out int userId, out string role)
+    {
+        userId = 0;
+        role = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(token) || !token.StartsWith("dev-token-", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var parts = token.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4 || !int.TryParse(parts[2], out userId))
+        {
+            return false;
+        }
+
+        role = parts[3];
+        return !string.IsNullOrWhiteSpace(role);
+    }
+
     private static bool IsAllowedMobileCallback(string callback)
         => callback.StartsWith("coachly://auth-callback", StringComparison.OrdinalIgnoreCase);
+
+    private string ResolveMobileCallback(string? mobileCallback)
+        => string.IsNullOrWhiteSpace(mobileCallback)
+            ? "coachly://auth-callback"
+            : mobileCallback;
 
     private string BuildAbsoluteUrl(string path)
     {
@@ -292,6 +481,14 @@ public class AuthController : ControllerBase
         return $"{Request.Scheme}://{Request.Host}{normalizedPath}";
     }
 
+    private static LoginResponseDto ToLoginResponse(User user)
+        => new()
+        {
+            UserId = user.Id,
+            Role = user.Role,
+            Token = BuildAppToken(user)
+        };
+
     private static string BuildAppToken(User user)
         => $"dev-token-{user.Id}-{user.Role.ToLowerInvariant()}";
 
@@ -299,6 +496,52 @@ public class AuthController : ControllerBase
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
         return Convert.ToHexString(bytes);
+    }
+
+    private static string BuildAppleClientSecret(string clientId, string teamId, string keyId, string privateKey)
+    {
+        var ecdsa = ECDsa.Create();
+        ecdsa.ImportFromPem(privateKey);
+        var credentials = new Microsoft.IdentityModel.Tokens.SigningCredentials(
+            new Microsoft.IdentityModel.Tokens.ECDsaSecurityKey(ecdsa) { KeyId = keyId },
+            Microsoft.IdentityModel.Tokens.SecurityAlgorithms.EcdsaSha256);
+
+        var tokenDescriptor = new Microsoft.IdentityModel.Tokens.SecurityTokenDescriptor
+        {
+            Audience = "https://appleid.apple.com",
+            Issuer = teamId,
+            Subject = new System.Security.Claims.ClaimsIdentity(new[]
+            {
+                new System.Security.Claims.Claim("sub", clientId)
+            }),
+            Expires = DateTime.UtcNow.AddMinutes(10),
+            IssuedAt = DateTime.UtcNow,
+            SigningCredentials = credentials
+        };
+
+        var handler = new JwtSecurityTokenHandler();
+        var token = handler.CreateToken(tokenDescriptor);
+        return handler.WriteToken(token);
+    }
+
+    private static ExternalIdentityClaims? ParseJwtPayload(string jwt)
+    {
+        var parts = jwt.Split('.');
+        if (parts.Length < 2)
+        {
+            return null;
+        }
+
+        try
+        {
+            var payloadBytes = WebEncoders.Base64UrlDecode(parts[1]);
+            var payloadJson = Encoding.UTF8.GetString(payloadBytes);
+            return JsonSerializer.Deserialize<ExternalIdentityClaims>(payloadJson);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private sealed class GoogleTokenResponse
@@ -316,9 +559,34 @@ public class AuthController : ControllerBase
         public bool EmailVerified { get; set; }
     }
 
+    private sealed class AppleTokenResponse
+    {
+        [JsonPropertyName("id_token")]
+        public string IdToken { get; set; } = string.Empty;
+    }
+
+    private sealed class ExternalIdentityClaims
+    {
+        public string? Email { get; set; }
+        public string? Name { get; set; }
+
+        [JsonPropertyName("email_verified")]
+        public string? EmailVerified { get; set; }
+
+        [JsonPropertyName("sub")]
+        public string? Subject { get; set; }
+
+        [JsonIgnore]
+        public string NameOrEmail =>
+            string.IsNullOrWhiteSpace(Name)
+                ? (Email ?? Subject ?? "Apple User")
+                : Name;
+    }
+
     private sealed class OAuthStatePayload
     {
         public string MobileCallback { get; set; } = string.Empty;
+        public string Provider { get; set; } = string.Empty;
         public long IssuedAtUnix { get; set; }
         public string Nonce { get; set; } = string.Empty;
     }

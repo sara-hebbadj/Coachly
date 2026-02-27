@@ -80,7 +80,9 @@ public class LoginViewModel : BaseViewModel
 
         if (response is null)
         {
-            ErrorMessage = "Invalid email or password.";
+            ErrorMessage = string.IsNullOrWhiteSpace(_authService.LastAuthError)
+                ? "Invalid email or password."
+                : _authService.LastAuthError;
             return;
         }
 
