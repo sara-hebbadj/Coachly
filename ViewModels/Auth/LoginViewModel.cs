@@ -4,7 +4,7 @@ using Coachly.Shared.DTOs;
 
 namespace Coachly.ViewModels.Auth;
 
-public class LoginViewModel : BaseViewModel
+public partial class LoginViewModel : BaseViewModel
 {
 #pragma warning disable CA1416
     private readonly AuthService _authService;
@@ -80,7 +80,9 @@ public class LoginViewModel : BaseViewModel
 
         if (response is null)
         {
-            ErrorMessage = "Invalid email or password.";
+            ErrorMessage = string.IsNullOrWhiteSpace(_authService.LastAuthError)
+                ? "Invalid email or password."
+                : _authService.LastAuthError;
             return;
         }
 
