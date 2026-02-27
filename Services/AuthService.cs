@@ -49,6 +49,31 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
 
     public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
     {
+        LastAuthError = null;
+
+        try
+        {
+            var normalizedRequest = new LoginRequestDto
+            {
+                Email = request.Email.Trim(),
+                Password = request.Password.Trim()
+            };
+
+            var response = await httpClient.PostAsJsonAsync("api/auth/login", normalizedRequest);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var dto = await response.Content.ReadFromJsonAsync<LoginResponseDto>();
+            if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
+            {
+                return null;
+            }
+
+
+    public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
+    {
         try
         {
             var token = await SecureStorage.Default.GetAsync(AuthTokenKey);
@@ -127,6 +152,13 @@ public class AuthService(HttpClient httpClient, AuthProviderOptions providerOpti
                 Password = password.Trim(),
                 Role = role
             };
+
+            var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+
 
             var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
             if (response.IsSuccessStatusCode)

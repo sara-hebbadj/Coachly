@@ -3,8 +3,9 @@ using Coachly.Services;
 
 namespace Coachly.ViewModels.Auth;
 
-public class RegisterViewModel : BaseViewModel
+public partial class RegisterViewModel : BaseViewModel
 {
+#pragma warning disable CA1416
     private readonly AuthService _authService;
 
     private string _fullName = string.Empty;
@@ -69,4 +70,5 @@ public class RegisterViewModel : BaseViewModel
         await Shell.Current.DisplayAlert("Success", "Your account is ready. Please login.", "OK");
         await Shell.Current.GoToAsync("//Login");
     }
+#pragma warning restore CA1416
 }

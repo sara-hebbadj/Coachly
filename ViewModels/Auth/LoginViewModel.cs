@@ -4,7 +4,7 @@ using Coachly.Shared.DTOs;
 
 namespace Coachly.ViewModels.Auth;
 
-public class LoginViewModel : BaseViewModel
+public partial class LoginViewModel : BaseViewModel
 {
 #pragma warning disable CA1416
     private readonly AuthService _authService;
